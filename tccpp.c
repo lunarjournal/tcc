@@ -1929,7 +1929,9 @@ ST_FUNC void preprocess(int is_bof)
         break;
 
     case TOK_LINE:
-        next_nomacro();
+        parse_flags &= ~PARSE_FLAG_TOK_NUM;
+        next();
+        parse_flags |= PARSE_FLAG_TOK_NUM;
         if (tok != TOK_PPNUM) {
     _line_err:
             tcc_error("wrong #line format");
@@ -1944,16 +1946,21 @@ ST_FUNC void preprocess(int is_bof)
                 goto _line_err;
             n = n * 10 + *q - '0';
         }
-        next_nomacro();
-        if (tok != TOK_LINEFEED) {
-            if (tok == TOK_PPSTR && tokc.str.data[0] == '"') {
-                tokc.str.data[tokc.str.size - 2] = 0;
-                tccpp_putfile(tokc.str.data + 1);
-            } else
-                goto _line_err;
+        parse_flags &= ~PARSE_FLAG_TOK_STR;
+        next();
+        parse_flags |= PARSE_FLAG_TOK_STR;
+        if (tok == TOK_PPSTR && tokc.str.data[0] == '"') {
+            tokc.str.data[tokc.str.size - 2] = 0;
+            tccpp_putfile(tokc.str.data + 1);
+            n--;
+            if (macro_ptr && *macro_ptr == 0)
+                macro_stack->save_line_num = n;
         }
+        else if (tok != TOK_LINEFEED)
+            goto _line_err;
         if (file->fd > 0)
             total_lines += file->line_num - n;
+        file->line_ref += file->line_num - n;
         file->line_num = n;
         goto ignore; /* skip optional level number */
 
